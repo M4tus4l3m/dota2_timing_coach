@@ -2,6 +2,8 @@
 
 Desktop app that gives you TTS audio alerts for recurring Dota 2 events (runes, lotus, stacks) by reading the game clock via Game State Integration.
 
+![Dota 2 Timer Assistant](assets/example.png)
+
 ## Tracked events
 
 | Event       | Interval | First occurrence |
