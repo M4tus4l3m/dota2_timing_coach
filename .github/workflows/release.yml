@@ -1,0 +1,77 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            suffix: linux-amd64
+          - os: windows-latest
+            suffix: windows-amd64.exe
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y espeak libespeak-dev python3-tk
+
+      - name: Install Poetry & project deps
+        run: |
+          pip install poetry pyinstaller
+          poetry install --no-interaction
+
+      - name: Build binary
+        run: poetry run pyinstaller dota2_timer.spec
+
+      - name: Rename artifact
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            mv dist/dota2_timer.exe dist/dota2_timer-${{ matrix.suffix }}
+          else
+            mv dist/dota2_timer dist/dota2_timer-${{ matrix.suffix }}
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dota2_timer-${{ matrix.suffix }}
+          path: dist/dota2_timer-${{ matrix.suffix }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          body: |
+            ## Downloads
+            - **Windows**: `dota2_timer-windows-amd64.exe` — double-click to run
+            - **Linux**: `dota2_timer-linux-amd64` — requires `espeak` installed (`sudo apt install espeak`)
+
+            ```bash
+            chmod +x dota2_timer-linux-amd64
+            ./dota2_timer-linux-amd64
+            ```
