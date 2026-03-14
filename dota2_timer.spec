@@ -43,6 +43,12 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+import os
+
+icon_file = os.path.join("assets", "dota.ico")
+if not os.path.exists(icon_file):
+    icon_file = None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -57,4 +63,5 @@ exe = EXE(
     upx_exclude=[],
     runtime_tmpdir=None,
     console=(sys.platform != "win32"),
+    icon=icon_file,
 )

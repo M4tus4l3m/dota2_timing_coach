@@ -38,6 +38,9 @@ jobs:
           poetry install --no-interaction
           poetry run pip install pyinstaller
 
+      - name: Generate .ico from dota.png
+        run: poetry run python -c "from PIL import Image; Image.open('assets/dota.png').save('assets/dota.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(256,256)])"
+
       - name: Build binary
         run: poetry run pyinstaller dota2_timer.spec
 
