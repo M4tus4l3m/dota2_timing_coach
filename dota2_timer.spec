@@ -4,11 +4,16 @@ import sys
 block_cipher = None
 
 hidden = [
+    "pyttsx3",
+    "pyttsx3.engine",
+    "pyttsx3.driver",
+    "pyttsx3.voice",
     "pyttsx3.drivers",
     "pyttsx3.drivers.espeak",
     "pyttsx3.drivers._espeak",
     "pyttsx3.drivers.sapi5",
     "pyttsx3.drivers.dummy",
+    "pyttsx3.drivers.nsss",
 ]
 
 if sys.platform == "win32":
