@@ -34,8 +34,9 @@ jobs:
 
       - name: Install Poetry & project deps
         run: |
-          pip install poetry pyinstaller
+          pip install poetry
           poetry install --no-interaction
+          poetry run pip install pyinstaller
 
       - name: Build binary
         run: poetry run pyinstaller dota2_timer.spec
