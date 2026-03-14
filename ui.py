@@ -169,6 +169,7 @@ class App:
             self._root.update_idletasks()
             self._root.overrideredirect(True)
             self._center_window()
+            self._setup_windows_taskbar()
 
         self._timer_engine = TimerEngine(
             root, self._game_state, audio,
@@ -526,6 +527,23 @@ class App:
 
     # ── Window management (Windows custom frame) ─────────────────────
 
+    def _setup_windows_taskbar(self) -> None:
+        """Force taskbar entry for an overrideredirect window on Windows."""
+        import ctypes
+        GWL_EXSTYLE = -20
+        WS_EX_APPWINDOW = 0x00040000
+        WS_EX_TOOLWINDOW = 0x00000080
+
+        self._hwnd = ctypes.windll.user32.GetParent(self._root.winfo_id())
+
+        style = ctypes.windll.user32.GetWindowLongW(self._hwnd, GWL_EXSTYLE)
+        style = (style | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
+        ctypes.windll.user32.SetWindowLongW(self._hwnd, GWL_EXSTYLE, style)
+
+        # Hide/show to apply the new style
+        self._root.withdraw()
+        self._root.after(10, self._root.deiconify)
+
     def _center_window(self) -> None:
         w = self._root.winfo_width()
         h = self._root.winfo_height()
@@ -545,13 +563,11 @@ class App:
         self._root.geometry(f"+{x}+{y}")
 
     def _minimize(self) -> None:
-        self._root.overrideredirect(False)
-        self._root.iconify()
-        self._root.bind("<Map>", self._on_restore)
-
-    def _on_restore(self, event) -> None:
-        self._root.unbind("<Map>")
-        self._root.overrideredirect(True)
+        if _IS_WINDOWS:
+            import ctypes
+            ctypes.windll.user32.ShowWindow(self._hwnd, 6)  # SW_MINIMIZE
+        else:
+            self._root.iconify()
 
     def _on_close(self) -> None:
         _save_config(self._gather_config())
