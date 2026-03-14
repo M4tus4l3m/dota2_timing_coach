@@ -9,7 +9,7 @@ import pygame
 
 
 # Events that get TTS clips generated
-EVENTS = ["power rune", "bounty rune", "lotus pool", "wisdom rune", "stack"]
+EVENTS = ["power rune", "bounty rune", "lotus pool", "wisdom rune", "neutrals"]
 
 # Supported pre-alert delay values (seconds)
 SUPPORTED_DELAYS = [5, 10, 15, 20, 25, 30, 45, 60]
@@ -31,7 +31,12 @@ def _clip_key(event: str) -> str:
 
 class AudioEngine:
     def __init__(self) -> None:
-        pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
+        self._mixer_ok = False
+        try:
+            pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
+            self._mixer_ok = True
+        except pygame.error:
+            pass
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._clip_dir = tempfile.mkdtemp(prefix="dota2timer_")
         self._clips: dict[str, str] = {}  # clip_name -> wav path
@@ -74,7 +79,7 @@ class AudioEngine:
         engine.runAndWait()
         engine.stop()
 
-    # ── Playback ────────────────────────────────────────────────────
+    # ── Playback ──────────────────────────────────────────────────
 
     def play(self, clip_name: str) -> None:
         """Thread-safe enqueue of a clip by name."""
@@ -102,5 +107,6 @@ class AudioEngine:
     def shutdown(self) -> None:
         self._queue.put(_SENTINEL)
         self._thread.join(timeout=3)
-        pygame.mixer.quit()
+        if self._mixer_ok:
+            pygame.mixer.quit()
         shutil.rmtree(self._clip_dir, ignore_errors=True)

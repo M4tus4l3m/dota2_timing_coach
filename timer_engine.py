@@ -5,9 +5,9 @@ from audio_engine import AudioEngine, get_closest_delay
 EVENTS = [
     {"name": "power_rune",  "label": "Power Rune",  "interval": 120, "start": 0},
     {"name": "bounty_rune", "label": "Bounty Rune", "interval": 180, "start": 0},
-    {"name": "lotus_pool",  "label": "Lotus Pool",  "interval": 180, "start": 0},
-    {"name": "wisdom_rune", "label": "Wisdom Rune", "interval": 420, "start": 0},
-    {"name": "stack",       "label": "Stack",        "interval": 60,  "start": 60},
+    {"name": "lotus_pool",  "label": "Lotus Pool",  "interval": 180, "start": 180},
+    {"name": "wisdom_rune", "label": "Wisdom Rune", "interval": 420, "start": 420},
+    {"name": "neutrals",    "label": "Neutrals",     "interval": 60,  "start": 60},
 ]
 
 IN_PROGRESS = "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"
@@ -16,17 +16,19 @@ TICK_MS = 200  # timer resolution
 
 
 class TimerEngine:
-    def __init__(self, root, game_state, audio: AudioEngine, get_delays) -> None:
+    def __init__(self, root, game_state, audio: AudioEngine, get_delays, get_enabled=None) -> None:
         """
-        root:       tk.Tk (for root.after scheduling)
-        game_state: gsi_server.GameState
-        audio:      AudioEngine instance
-        get_delays: callable returning dict[str, int] of pre-alert offsets
+        root:        tk.Tk (for root.after scheduling)
+        game_state:  gsi_server.GameState
+        audio:       AudioEngine instance
+        get_delays:  callable returning dict[str, list[int]] of pre-alert offsets
+        get_enabled: callable returning set[str] of enabled event names (None = all)
         """
         self._root = root
         self._game_state = game_state
         self._audio = audio
         self._get_delays = get_delays
+        self._get_enabled = get_enabled
         self._announced: set[str] = set()
         self._last_game_state: str = ""
         self._running = False
@@ -72,8 +74,11 @@ class TimerEngine:
             self._notify_status("active")
             clock = snap["clock_time"]
             delays = self._get_delays()
+            enabled = self._get_enabled() if self._get_enabled else None
             for event in EVENTS:
-                self._check_event(event, clock, delays.get(event["name"], 30))
+                if enabled is not None and event["name"] not in enabled:
+                    continue
+                self._check_event(event, clock, delays.get(event["name"], [30]))
         elif gs == IN_PROGRESS and snap["paused"]:
             pass  # keep status as-is during pause
         else:
@@ -82,14 +87,14 @@ class TimerEngine:
 
         self._after_id = self._root.after(TICK_MS, self._tick)
 
-    def _check_event(self, event: dict, clock: float, pre_delay: int) -> None:
+    def _check_event(self, event: dict, clock: float, pre_delays: list[int]) -> None:
         name = event["name"]
         interval = event["interval"]
         start = event["start"]
 
-        # Generate occurrence times within a reasonable window
-        # Check occurrences from start up to clock + max possible pre-delay + buffer
-        max_check = clock + 65  # slightly beyond max delay (60) + tick margin
+        # Look ahead far enough to catch the largest configured delay
+        max_pre = max(pre_delays) if pre_delays else 0
+        max_check = clock + max_pre + 5
 
         t = start
         while t <= max_check:
@@ -100,15 +105,16 @@ class TimerEngine:
                     self._audio.play(name)
                     self._announced.add(on_key)
 
-            # Pre-alert
-            if pre_delay > 0:
-                pre_time = t - pre_delay
-                pre_key = f"{name}_pre@{t}"
-                if pre_key not in self._announced:
-                    if pre_time >= 0 and abs(clock - pre_time) < 1.5:
-                        snapped = get_closest_delay(pre_delay)
-                        clip_name = f"{name}_pre_{snapped}"
-                        self._audio.play(clip_name)
-                        self._announced.add(pre_key)
+            # Pre-alerts (one per configured delay)
+            for pre_delay in pre_delays:
+                if pre_delay > 0:
+                    pre_time = t - pre_delay
+                    pre_key = f"{name}_pre_{pre_delay}@{t}"
+                    if pre_key not in self._announced:
+                        if pre_time >= 0 and abs(clock - pre_time) < 1.5:
+                            snapped = get_closest_delay(pre_delay)
+                            clip_name = f"{name}_pre_{snapped}"
+                            self._audio.play(clip_name)
+                            self._announced.add(pre_key)
 
             t += interval

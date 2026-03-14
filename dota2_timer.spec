@@ -30,7 +30,7 @@ a = Analysis(
     ["main.py"],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[("assets", "assets")],
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={},
