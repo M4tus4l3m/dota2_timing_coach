@@ -92,7 +92,7 @@ class App:
         frm_status.pack(side="right")
 
         self._status_dot = tk.Canvas(frm_status, width=14, height=14, highlightthickness=0)
-        self._status_dot.pack(side="left", padx=(0, 4))
+        self._status_dot.pack(side="left", padx=4)
         self._dot_id = self._status_dot.create_oval(2, 2, 12, 12, fill="#888888", outline="")
 
         self._status_label = tk.Label(frm_status, text="Inactive")

@@ -14,7 +14,7 @@ def main() -> None:
     splash.resizable(False, False)
     label = tk.Label(splash, text="Generating audio clips...", padx=30, pady=20)
     label.pack()
-    progress = tk.Label(splash, text="0 / 0", padx=30, pady=(0, 15))
+    progress = tk.Label(splash, text="0 / 0", padx=30, pady=10)
     progress.pack()
 
     audio = AudioEngine()
