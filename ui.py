@@ -173,7 +173,8 @@ class App:
 
         self._timer_engine = TimerEngine(
             root, self._game_state, audio,
-            self.get_pre_alert_delays, self.get_enabled_events
+            self.get_pre_alert_delays, self.get_enabled_events,
+            self.get_stop_at_seconds,
         )
         self._timer_engine.set_status_callback(self._update_status)
 
@@ -292,6 +293,29 @@ class App:
                 "remove_btns": [],
                 "add_btn": add_canvas,
             }
+
+        # Stop-at row
+        frm_stop = tk.Frame(self._root, padx=10, bg=TH["bg"])
+        frm_stop.pack(fill="x", pady=(2, 4))
+
+        self._stop_at_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            frm_stop, variable=self._stop_at_var,
+            bg=TH["bg"], activebackground=TH["bg"],
+            selectcolor="#ffffff", highlightthickness=0,
+        ).pack(side="left")
+
+        _themed_label(frm_stop, text="Stop at", bg=TH["bg"]).pack(
+            side="left", padx=(0, 4),
+        )
+
+        self._stop_at_entry = _themed_entry(frm_stop, width=4)
+        self._stop_at_entry.insert(0, "40")
+        self._stop_at_entry.pack(side="left")
+
+        _themed_label(frm_stop, text="min", bg=TH["bg"]).pack(
+            side="left", padx=(4, 0),
+        )
 
         # Controls row
         frm_ctrl = tk.Frame(self._root, padx=10, pady=8, bg=TH["bg"])
@@ -445,12 +469,26 @@ class App:
                     for v in values[1:]:
                         self._add_offset(name, value=v)
 
+        stop_at = self._config.get("stop_at", {})
+        if stop_at:
+            self._stop_at_var.set(stop_at.get("enabled", False))
+            self._stop_at_entry.delete(0, tk.END)
+            self._stop_at_entry.insert(0, str(stop_at.get("minutes", 40)))
+
     def _gather_config(self) -> dict:
         """Gather current UI state into a config dict."""
+        try:
+            stop_minutes = int(self._stop_at_entry.get().strip())
+        except ValueError:
+            stop_minutes = 40
         return {
             "steam_path": self._steam_entry.get().strip(),
             "enabled": {name: var.get() for name, var in self._enabled_vars.items()},
             "offsets": self.get_pre_alert_delays(),
+            "stop_at": {
+                "enabled": self._stop_at_var.get(),
+                "minutes": stop_minutes,
+            },
         }
 
     # ── Actions ──────────────────────────────────────────────────────
@@ -524,6 +562,16 @@ class App:
     def get_enabled_events(self) -> set[str]:
         """Return the set of event names that are currently checked."""
         return {name for name, var in self._enabled_vars.items() if var.get()}
+
+    def get_stop_at_seconds(self) -> int | None:
+        """Return the stop-at limit in seconds, or None if disabled."""
+        if not self._stop_at_var.get():
+            return None
+        try:
+            minutes = int(self._stop_at_entry.get().strip())
+            return max(1, minutes) * 60
+        except ValueError:
+            return None
 
     # ── Window management (Windows custom frame) ─────────────────────
 

@@ -1,13 +1,12 @@
 [tool.poetry]
 name = "dota2-timer"
 version = "0.1.0"
-description = "Dota 2 real-time timer assistant with TTS audio alerts"
+description = "Dota 2 real-time timer assistant with audio alerts"
 authors = []
 package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
-pyttsx3 = "^2.98"
 pygame = "^2.6"
 Pillow = "^11.0"
 

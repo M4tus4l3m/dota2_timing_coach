@@ -1,4 +1,4 @@
-from audio_engine import AudioEngine, get_closest_delay
+from audio_engine import AudioEngine
 
 # ── Event definitions ────────────────────────────────────────────
 
@@ -16,24 +16,28 @@ TICK_MS = 200  # timer resolution
 
 
 class TimerEngine:
-    def __init__(self, root, game_state, audio: AudioEngine, get_delays, get_enabled=None) -> None:
+    def __init__(self, root, game_state, audio: AudioEngine, get_delays,
+                 get_enabled=None, get_stop_at=None) -> None:
         """
-        root:        tk.Tk (for root.after scheduling)
-        game_state:  gsi_server.GameState
-        audio:       AudioEngine instance
-        get_delays:  callable returning dict[str, list[int]] of pre-alert offsets
-        get_enabled: callable returning set[str] of enabled event names (None = all)
+        root:         tk.Tk (for root.after scheduling)
+        game_state:   gsi_server.GameState
+        audio:        AudioEngine instance
+        get_delays:   callable returning dict[str, list[int]] of pre-alert offsets
+        get_enabled:  callable returning set[str] of enabled event names (None = all)
+        get_stop_at:  callable returning int|None — stop alerts after this many seconds
         """
         self._root = root
         self._game_state = game_state
         self._audio = audio
         self._get_delays = get_delays
         self._get_enabled = get_enabled
+        self._get_stop_at = get_stop_at
         self._announced: set[str] = set()
         self._last_game_state: str = ""
         self._running = False
         self._after_id = None
         self._on_status_change = None
+        self._schedule_built = False
 
     def set_status_callback(self, callback) -> None:
         """callback(status: str) where status is 'inactive', 'waiting', or 'active'."""
@@ -46,6 +50,7 @@ class TimerEngine:
     def start(self) -> None:
         self._running = True
         self._announced.clear()
+        self._schedule_built = False
         self._last_game_state = ""
         self._notify_status("waiting")
         self._tick()
@@ -55,7 +60,18 @@ class TimerEngine:
         if self._after_id is not None:
             self._root.after_cancel(self._after_id)
             self._after_id = None
+        self._audio.clear_schedule()
+        self._schedule_built = False
         self._notify_status("inactive")
+
+    def _build_schedule(self) -> None:
+        """Build the full playback schedule from current config."""
+        enabled = self._get_enabled() if self._get_enabled else {e["name"] for e in EVENTS}
+        delays = self._get_delays()
+        stop_at = self._get_stop_at() if self._get_stop_at else None
+        horizon = stop_at if stop_at else 90 * 60
+        self._audio.build_schedule(EVENTS, enabled, delays, horizon_seconds=horizon)
+        self._schedule_built = True
 
     def _tick(self) -> None:
         if not self._running:
@@ -67,18 +83,27 @@ class TimerEngine:
         # Detect match reset (state changed away from in-progress)
         if self._last_game_state == IN_PROGRESS and gs != IN_PROGRESS:
             self._announced.clear()
+            self._audio.clear_schedule()
+            self._schedule_built = False
             self._notify_status("waiting")
         self._last_game_state = gs
 
         if gs == IN_PROGRESS and not snap["paused"]:
             self._notify_status("active")
             clock = snap["clock_time"]
-            delays = self._get_delays()
-            enabled = self._get_enabled() if self._get_enabled else None
-            for event in EVENTS:
-                if enabled is not None and event["name"] not in enabled:
-                    continue
-                self._check_event(event, clock, delays.get(event["name"], [30]))
+
+            # Build schedule on first active tick
+            if not self._schedule_built:
+                self._build_schedule()
+
+            # Check a small window around the current clock to avoid missing
+            for check_sec in range(int(clock) - 1, int(clock) + 2):
+                key = f"@{check_sec}"
+                if key not in self._announced:
+                    clip = self._audio.get_clip_for_second(check_sec)
+                    if clip is not None:
+                        self._audio.play_wav(clip)
+                        self._announced.add(key)
         elif gs == IN_PROGRESS and snap["paused"]:
             pass  # keep status as-is during pause
         else:
@@ -86,35 +111,3 @@ class TimerEngine:
                 self._notify_status("waiting")
 
         self._after_id = self._root.after(TICK_MS, self._tick)
-
-    def _check_event(self, event: dict, clock: float, pre_delays: list[int]) -> None:
-        name = event["name"]
-        interval = event["interval"]
-        start = event["start"]
-
-        # Look ahead far enough to catch the largest configured delay
-        max_pre = max(pre_delays) if pre_delays else 0
-        max_check = clock + max_pre + 5
-
-        t = start
-        while t <= max_check:
-            # On-time alert
-            on_key = f"{name}@{t}"
-            if on_key not in self._announced:
-                if t >= 0 and abs(clock - t) < 1.5:
-                    self._audio.play(name)
-                    self._announced.add(on_key)
-
-            # Pre-alerts (one per configured delay)
-            for pre_delay in pre_delays:
-                if pre_delay > 0:
-                    pre_time = t - pre_delay
-                    pre_key = f"{name}_pre_{pre_delay}@{t}"
-                    if pre_key not in self._announced:
-                        if pre_time >= 0 and abs(clock - pre_time) < 1.5:
-                            snapped = get_closest_delay(pre_delay)
-                            clip_name = f"{name}_pre_{snapped}"
-                            self._audio.play(clip_name)
-                            self._announced.add(pre_key)
-
-            t += interval

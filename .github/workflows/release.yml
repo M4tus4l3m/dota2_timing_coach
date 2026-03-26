@@ -30,7 +30,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y espeak libespeak-dev python3-tk
+          sudo apt-get install -y python3-tk
 
       - name: Install Poetry & project deps
         run: |
@@ -73,7 +73,7 @@ jobs:
           body: |
             ## Downloads
             - **Windows**: `dota2_timer-windows-amd64.exe` — double-click to run
-            - **Linux**: `dota2_timer-linux-amd64` — requires `espeak` installed (`sudo apt install espeak`)
+            - **Linux**: `dota2_timer-linux-amd64`
 
             ```bash
             chmod +x dota2_timer-linux-amd64
